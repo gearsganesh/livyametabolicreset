@@ -51,7 +51,6 @@
       await backend.client.storage.from(bucket).remove([path]).catch(() => {});
       throw rowError;
     }
-
     return row;
   }
 
@@ -63,7 +62,8 @@
     if (rowError) throw rowError;
     if (!row) throw new Error('File not found or not accessible');
 
-    const { data, error } = await backend.client.storage.from(row.bucket_id).createSignedUrl(row.storage_path, expiresIn, { download: row.file_name });
+    const { data, error } = await backend.client.storage.from(row.bucket_id)
+      .createSignedUrl(row.storage_path, expiresIn, { download: row.file_name });
     if (error) throw error;
     return data.signedUrl;
   }
@@ -83,28 +83,34 @@
     return true;
   }
 
+  async function invokeApi(path, body, method = 'POST') {
+    const backend = await waitForBackend();
+    const { data: { session } } = await backend.client.auth.getSession();
+    if (!session?.access_token) throw new Error('LIVYA session expired. Please sign in again.');
+    const response = await fetch(`${backend.config.url}/functions/v1/metabolic-api/${path}`, {
+      method,
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+        apikey: backend.config.publishableKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body || {})
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.error || `Backend request failed (${response.status})`);
+    return data;
+  }
+
   async function createClientAccount({ clientId, email, password }) {
     const backend = await waitForBackend();
     if (backend.role !== 'admin') throw new Error('Administrator access required');
-    const { data, error } = await backend.client.functions.invoke('metabolic-api/client-account', {
-      method: 'POST',
-      body: { clientId, email, password }
-    });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    return data;
+    return invokeApi('client-account', { clientId, email, password }, 'POST');
   }
 
   async function setClientAccountStatus({ userId, status }) {
     const backend = await waitForBackend();
     if (backend.role !== 'admin') throw new Error('Administrator access required');
-    const { data, error } = await backend.client.functions.invoke('metabolic-api/client-account', {
-      method: 'PATCH',
-      body: { userId, status }
-    });
-    if (error) throw error;
-    if (data?.error) throw new Error(data.error);
-    return data;
+    return invokeApi('client-account', { userId, status }, 'PATCH');
   }
 
   window.LIVYA_BACKEND_FILES = {
