@@ -7,16 +7,16 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const out = path.join(root, '.vercel', 'output', 'static');
 await mkdir(out, { recursive: true });
 
-// Copy the prototype site as-is, then inject the production backend bootstrap
-// into the build artifact. The GitHub source remains easy to diff and review.
 let html = await readFile(path.join(root, 'index.html'), 'utf8');
 const marker = '<script src="supabase-bridge.js"></script>';
 const persistenceMarker = '<script src="supabase-persistence.js"></script>';
+const storageMarker = '<script src="supabase-storage.js"></script>';
 const injection = [
   '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>',
   '<script src="/supabase-config.js"></script>',
   marker,
-  persistenceMarker
+  persistenceMarker,
+  storageMarker
 ].join('\n');
 
 // The prototype keeps DB as a top-level `let`. Top-level let/const bindings are
@@ -33,6 +33,7 @@ await writeFile(path.join(out, 'index.html'), builtHtml, 'utf8');
 await cp(path.join(root, 'supabase-config.js'), path.join(out, 'supabase-config.js'));
 await cp(path.join(root, 'supabase-bridge.js'), path.join(out, 'supabase-bridge.js'));
 await cp(path.join(root, 'supabase-persistence.js'), path.join(out, 'supabase-persistence.js'));
+await cp(path.join(root, 'supabase-storage.js'), path.join(out, 'supabase-storage.js'));
 
 for (const name of ['docs', 'samples']) {
   const source = path.join(root, name);
