@@ -2,8 +2,8 @@
  *
  * Phase 1 deliberately keeps the existing clinical UI/engine intact while
  * replacing prototype authentication and initial data hydration with
- * Supabase. The next phases can progressively replace local writes with
- * repository calls without rewriting the clinical renderer.
+ * Supabase. Phase 2 adds a write-through adapter without rewriting the
+ * clinical renderer.
  */
 (function () {
   'use strict';
@@ -23,7 +23,8 @@
     }
   });
 
-  window.LIVYA_BACKEND = Object.freeze({ client, config: cfg });
+  const backend = { client, config: cfg, sessionUserId: null, role: null, lastPersistAt: null, lastPersistError: null, persist: null };
+  window.LIVYA_BACKEND = backend;
   const DB_KEY = 'livya-metabolic-v2';
   const SESSION_KEY = 'livya-session';
 
@@ -42,10 +43,6 @@
     localStorage.setItem(DB_KEY, JSON.stringify(db));
   }
 
-  function initials(name) {
-    return String(name || '?').split(/\s+/).slice(0, 2).map(x => x[0]).join('').toUpperCase();
-  }
-
   function localRole(role) {
     return role === 'ADMIN' ? 'admin' : role === 'SUB_ADMIN' ? 'subadmin' : 'client';
   }
@@ -61,6 +58,10 @@
       throw new Error('Your LIVYA Metabolic account is not active. Ask an administrator to enable it.');
     }
 
+    const role = localRole(profile.role);
+    backend.sessionUserId = session.user.id;
+    backend.role = role;
+
     let db = localDB() || { v: 3, updated: new Date().toISOString(), users: [], clients: [], programs: [], recipes: [], files: [], audit: [] };
     db.users = Array.isArray(db.users) ? db.users : [];
     db.clients = Array.isArray(db.clients) ? db.clients : [];
@@ -69,7 +70,6 @@
     db.files = Array.isArray(db.files) ? db.files : [];
     db.audit = Array.isArray(db.audit) ? db.audit : [];
 
-    const role = localRole(profile.role);
     const email = session.user.email || '';
     const userRecord = {
       id: session.user.id,
@@ -89,7 +89,6 @@
     let clientsQuery = client.from('metabolic_clients').select('*').order('full_name');
     if (!staff) clientsQuery = clientsQuery.eq('client_user_id', session.user.id);
     const clients = await json(clientsQuery);
-
     const clientIds = clients.map(c => c.id);
 
     let reportsQuery = client.from('metabolic_reports')
@@ -126,7 +125,7 @@
 
     db.clients = clients.map(c => {
       const old = db.clients.find(x => x.id === c.id) || {};
-      const assignment = assignments.filter(a => a.client_id === c.id && a.status === 'ACTIVE').sort((a,b) => String(b.start_date).localeCompare(String(a.start_date)))[0];
+      const assignment = assignments.filter(a => a.client_id === c.id && a.status === 'ACTIVE').sort((a,b)=>String(b.start_date).localeCompare(String(a.start_date)))[0];
       const diet = diets.find(d => d.client_id === c.id);
       const cReports = reports.filter(r => r.client_id === c.id);
       const cCheckins = checkins.filter(x => x.client_id === c.id);
@@ -140,13 +139,14 @@
         sex: c.sex,
         age: c.age_years == null ? old.age : Number(c.age_years),
         height: c.height_cm == null ? old.height : Number(c.height_cm),
-        recordNumber: c.record_number || old.recordNumber || '',
+        mrn: c.record_number || old.mrn || '',
         assistantId: c.health_assistant_id || null,
         status: c.status,
-        notes: cNotes.map(n => ({ id:n.id, at:n.created_at, byName:n.author_id || 'Staff', text:n.content, clientVisible:n.client_visible })),
+        clientUserId: c.client_user_id || old.clientUserId || null,
+        notes: cNotes.map(n => ({ id:n.id, at:n.created_at, byName:n.author_id || 'Staff', text:n.content, visible:n.client_visible, authorId:n.author_id, noteType:n.note_type })),
         checkins: cCheckins.map(k => ({
-          id:k.id, date:k.checkin_date, at:k.created_at, self:k.source === 'client', byName:k.created_by || 'Client',
-          values:Object.fromEntries((k.metabolic_checkin_values || []).map(v => [v.metric_code, Number(v.value_numeric ?? v.value_text)]))
+          id:k.id, date:k.checkin_date, at:k.created_at, self:k.source === 'client', byName:k.created_by || 'Client', createdById:k.created_by,
+          notes:k.notes || '', values:Object.fromEntries((k.metabolic_checkin_values || []).map(v => [v.metric_code, Number(v.value_numeric ?? v.value_text)]))
         })),
         visits: cReports.map(r => ({
           id:r.id, date:r.report_date, source:r.source_name || r.title, sourceFileId:r.source_file_id,
@@ -178,7 +178,7 @@
       prepMins:r.preparation_minutes, servings:r.servings, calories:r.calories, protein:r.protein_g,
       ingredients:r.ingredients, method:r.method, tip:r.tip, video:r.video_url,
       sharedAll:shares.some(s => s.recipe_id === r.id && s.share_all_clients),
-      sharedWith:shares.filter(s => s.recipe_id === r.id && s.client_id).map(s => ({ clientId:s.client_id, at:s.shared_at, byName:s.shared_by })),
+      sharedWith:shares.filter(s => s.recipe_id === r.id && s.client_id).map(s => ({ id:s.id, clientId:s.client_id, at:s.shared_at, byName:s.shared_by })),
       deleteRequest:null, at:r.created_at, byName:r.created_by || ''
     }));
 
