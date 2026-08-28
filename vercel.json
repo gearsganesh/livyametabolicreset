@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "node scripts/prepare-vercel.mjs",
-  "outputDirectory": ".vercel/output/static"
+  "outputDirectory": ".vercel/output/static",
+  "rewrites": [
+    {
+      "source": "/supabase/:path*",
+      "destination": "https://khtwrprihdkbpllxqlmh.supabase.co/:path*"
+    }
+  ]
 }
