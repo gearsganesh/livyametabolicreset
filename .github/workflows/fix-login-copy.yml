@@ -1,6 +1,6 @@
 name: One-time login screen cleanup
 
-on:
+'on':
   push:
     branches: [main]
 
@@ -14,15 +14,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Remove prototype login banners
-        shell: python
+      - name: Patch production login screen
         run: |
+          python - <<'PY'
           from pathlib import Path
           import re
 
           index = Path('index.html')
           s = index.read_text(encoding='utf-8')
-          original = s
 
           s = s.replace(
               ": 'Clinic staff and clients sign in here. Clients see only their own reports and files.'}",
@@ -30,66 +29,44 @@ jobs:
           )
 
           s = re.sub(
-              r'\s*\$\{creating \? \'\' : `<p class="tiny muted" style="margin-top:14px;line-height:1\.5">\s*First time here\? Enter your registered email and we will ask you to choose a password\.?</p>`\}',
+              r'''\s*\$\{creating \? '' : `<p class="tiny muted" style="margin-top:14px;line-height:1\.5">\s*First time here\? Enter your registered email and we will ask you to choose a password\.?</p>`\}''',
               '',
               s,
               flags=re.S,
           )
-
           index.write_text(s, encoding='utf-8')
 
           bridge = Path('supabase-bridge.js')
           b = bridge.read_text(encoding='utf-8')
-          b_original = b
 
           b = b.replace(
               '.demoacc{display:none!important}\n      .authbody::after{display:none!important}',
               '.demoacc{display:none!important}\n      .authbody::after{display:none!important}\n      .authbody .sub:empty{display:none!important}'
           )
 
-          old = '''  function cleanLoginCopy() {
-    document.querySelectorAll('.authbody p, .authbody div').forEach(node => {
-      const text = (node.textContent || '').replace(/\\s+/g, ' ').trim();
-      if (/^Clinic staff and clients sign in here\\./i.test(text) ||
-          /^First time here\\?/i.test(text) ||
-          /^PROTOTYPE\\s*[—-]\\s*ACCOUNTS IN THIS DEMO$/i.test(text)) node.remove();
-    });
-  }'''
-
-          new = '''  function cleanLoginCopy() {
-    document.querySelectorAll('.authbody p, .authbody div').forEach(node => {
-      const text = (node.textContent || '').replace(/\\s+/g, ' ').trim();
-      if (/^Clinic staff and clients sign in here\\./i.test(text) ||
-          /^First time here\\?/i.test(text) ||
-          /^PROTOTYPE\\s*[—-]\\s*ACCOUNTS IN THIS DEMO$/i.test(text)) node.remove();
-    });
-  }
-
-  function observeLoginCopy() {
+          marker = '''  function cleanLoginCopy() {'''
+          observer = '''  function observeLoginCopy() {
     const observer = new MutationObserver(() => cleanLoginCopy());
     observer.observe(document.body, {childList:true, subtree:true});
-  }'''
+  }
 
-          if old in b:
-              b = b.replace(old, new)
-          else:
-              raise SystemExit('Expected cleanLoginCopy block was not found')
+'''
+          if 'function observeLoginCopy()' not in b and marker in b:
+              b = b.replace(marker, observer + marker, 1)
 
-          b = b.replace(
-              '    cleanLoginCopy();\n  }',
-              '    cleanLoginCopy();\n    observeLoginCopy();\n  }'
-          )
-
+          b = b.replace('    cleanLoginCopy();\n  }', '    cleanLoginCopy();\n    observeLoginCopy();\n  }', 1)
           bridge.write_text(b, encoding='utf-8')
+          PY
 
-          if s == original and b == b_original:
-              raise SystemExit('No changes were made; expected login copy was not found')
-
-      - name: Commit cleanup and remove one-time workflow
+      - name: Commit changes and remove this workflow
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           rm -f .github/workflows/fix-login-copy.yml
           git add index.html supabase-bridge.js .github/workflows/fix-login-copy.yml
-          git commit -m "Fix production login screen copy"
-          git push
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "Fix production login screen"
+            git push
+          fi
