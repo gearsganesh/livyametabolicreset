@@ -8,21 +8,16 @@ const out = path.join(root, '.vercel', 'output', 'static');
 await mkdir(out, { recursive: true });
 
 let html = await readFile(path.join(root, 'index.html'), 'utf8');
-const marker = '<script src="supabase-bridge.js"></script>';
-const persistenceMarker = '<script src="supabase-persistence.js"></script>';
-const storageMarker = '<script src="supabase-storage.js"></script>';
-const messagesMarker = '<script src="/supabase-messages.js"></script>';
-const hardeningMarker = '<script src="/production-hardening.js"></script>';
 const productionMarker = 'window.LIVYA_PRODUCTION_BUILD = true;';
 const injection = [
   `<script>${productionMarker}</script>`,
   '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>',
   '<script src="/supabase-config.js"></script>',
-  marker,
-  persistenceMarker,
-  storageMarker,
-  messagesMarker,
-  hardeningMarker
+  '<script src="/supabase-bridge.js"></script>',
+  '<script src="/supabase-persistence.js"></script>',
+  '<script src="/supabase-storage.js"></script>',
+  '<script src="/supabase-messages.js"></script>',
+  '<script src="/production-hardening.js"></script>'
 ].join('\n');
 
 html = html.replace('let DB = null, CAP = null;', 'var DB = null, CAP = null;');
@@ -37,14 +32,15 @@ html = html.replace('DB = migrate(picked) || seed();', `DB = migrate(picked) || 
   };`);
 html = html.replace("if(!DB.clients || !DB.clients.length) DB = seed();", "if(!DB.clients) DB.clients = [];");
 
-// The old login implementation remains in the source for compatibility with
-// the single-file UI, but the production bridge captures #loginForm submits and
-// authenticates only through Supabase Auth.
-const builtHtml = html.includes(marker)
-  ? html
-  : html.replace('</head>', `${injection}\n</head>`);
+// Remove any adapters that may have been added during an earlier prototype
+// iteration, then inject exactly one production adapter set. This prevents
+// duplicate Supabase clients and duplicate submit handlers.
+html = html.replace(/<script[^>]+src=["'](?:https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2|\/?supabase-config\.js|\/?supabase-bridge\.js|\/?supabase-persistence\.js|\/?supabase-storage\.js|\/?supabase-messages\.js|\/?production-hardening\.js)["'][^>]*><\/script>\s*/gi, '');
+html = html.replace(/<script>\s*window\.LIVYA_PRODUCTION_BUILD\s*=\s*true;\s*<\/script>\s*/gi, '');
 
-await writeFile(path.join(out, 'index.html'), builtHtml, 'utf8');
+html = html.replace('</head>', `${injection}\n</head>`);
+
+await writeFile(path.join(out, 'index.html'), html, 'utf8');
 for (const name of [
   'supabase-config.js',
   'supabase-bridge.js',
