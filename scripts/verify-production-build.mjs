@@ -46,7 +46,7 @@ if (!config.includes('sb_publishable_')) throw new Error('Publishable Supabase k
 if (config.includes('sb_secret_') || config.includes('service_role')) throw new Error('Secret Supabase credential found in browser config');
 
 const bridge = await readFile(path.join(out, 'supabase-bridge.js'), 'utf8');
-for (const token of ['signInWithPassword','metabolic_profiles','capture']) {
+for (const token of ['signInWithPassword','metabolic_profiles','addEventListener(\'submit\'']) {
   if (!bridge.includes(token)) throw new Error(`Production Supabase auth bridge missing: ${token}`);
 }
 
