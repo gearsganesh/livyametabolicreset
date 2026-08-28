@@ -210,16 +210,34 @@
     const message = String(error?.message || error || 'Unable to sign in');
     if (/invalid login credentials/i.test(message)) return 'Email or password is incorrect.';
     if (/email not confirmed/i.test(message)) return 'Your email has not been confirmed. Ask the administrator to complete account setup.';
+    if (/failed to fetch|network/i.test(message)) return 'Unable to reach the authentication service. Please check the connection and try again.';
     return message;
+  }
+
+  function showAuthError(form, error) {
+    let box = form.parentElement.querySelector('.autherr');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'autherr';
+      box.setAttribute('role', 'alert');
+      form.parentElement.insertBefore(box, form);
+    }
+    box.textContent = backendError(error);
   }
 
   async function backendSignIn(form) {
     const email = form.querySelector('#liEmail')?.value?.trim().toLowerCase();
     const password = form.querySelector('#liPw')?.value || '';
-    if (!email || !password) return;
+    if (!email || !password) {
+      showAuthError(form, 'Enter your email address and password.');
+      return;
+    }
 
     const button = form.querySelector('#liGo');
-    if (button) button.disabled = true;
+    if (button) {
+      button.disabled = true;
+      button.textContent = 'Signing in…';
+    }
 
     try {
       const { error } = await client.auth.signInWithPassword({ email, password });
@@ -227,14 +245,26 @@
       await hydrate();
       window.location.reload();
     } catch (error) {
-      const box = document.createElement('div');
-      box.className = 'autherr';
-      box.style.marginBottom = '14px';
-      box.textContent = backendError(error);
-      form.parentElement.insertBefore(box, form);
+      console.error('[LIVYA] Sign-in failed:', error);
+      try { await client.auth.signOut(); } catch (_) {}
+      showAuthError(form, error);
     } finally {
-      if (button) button.disabled = false;
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Sign in';
+      }
     }
+  }
+
+  function cleanLoginCopy() {
+    document.querySelectorAll('.authbody p, .authbody div').forEach((node) => {
+      const text = (node.textContent || '').replace(/\s+/g, ' ').trim();
+      if (/^Clinic staff and clients sign in here\./i.test(text) ||
+          /^First time here\?/i.test(text) ||
+          /^PROTOTYPE\s*[—-]\s*ACCOUNTS IN THIS DEMO$/i.test(text)) {
+        node.remove();
+      }
+    });
   }
 
   function installLoginInterceptor() {
@@ -251,12 +281,14 @@
     const style = document.createElement('style');
     style.textContent = `
       .demoacc{display:none!important}
-      .authbody::after{content:'Production authentication · Supabase';display:block;margin-top:14px;text-align:center;font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+      .authbody::after{display:none!important}
       .livya-backend-status{font:10px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--good-ink);margin-left:8px}
     `;
     document.head.appendChild(style);
 
+    cleanLoginCopy();
     const observer = new MutationObserver(() => {
+      cleanLoginCopy();
       const mark = document.querySelector('.mark');
       if (mark && !mark.querySelector('.livya-backend-status')) {
         const s = document.createElement('span');
