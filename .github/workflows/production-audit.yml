@@ -2,7 +2,7 @@ name: Production audit
 
 on:
   push:
-    branches: [main, production-hardening]
+    branches: [main, production-hardening, production-hardening-20260828]
   pull_request:
     branches: [main]
 
@@ -16,5 +16,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Use Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
       - name: Audit production configuration
         run: node scripts/audit-production.mjs
+
+      - name: Verify production build
+        run: node scripts/verify-production-build.mjs
