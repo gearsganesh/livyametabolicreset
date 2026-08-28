@@ -1,0 +1,20 @@
+name: Production audit
+
+on:
+  push:
+    branches: [main, production-hardening]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Audit production configuration
+        run: node scripts/audit-production.mjs
