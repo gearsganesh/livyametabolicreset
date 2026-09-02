@@ -19,9 +19,6 @@ from public.metabolic_conversations c
 where c.id = m.conversation_id
   and m.client_id is null;
 
--- Existing rows must be attributable to a client before the new authorization
--- boundary is enabled. Fail the migration rather than silently creating an
--- inaccessible or cross-client message.
 do $$
 begin
   if exists (select 1 from public.metabolic_messages where client_id is null) then
@@ -30,18 +27,7 @@ begin
 end;
 $$;
 
--- Derive the immutable sender role from the authenticated identity model.
-update public.metabolic_messages m
-set sender_role = 'CLIENT'
-where sender_role is null
-  and exists (
-    select 1
-    from public.metabolic_clients c
-    where c.client_id_user_id = m.sender_id
-  );
-
--- Correct the column name used by the live clients table if the FK exposes
--- client_user_id, which is the production schema.
+-- Derive the sender role from the production identity model.
 update public.metabolic_messages m
 set sender_role = 'CLIENT'
 where sender_role is null
@@ -99,7 +85,7 @@ alter table public.metabolic_messages
   add constraint metabolic_messages_body_length_check
   check (length(trim(body)) between 1 and 10000);
 
--- Add the expected foreign key only if the live database does not already have it.
+-- Add the expected client foreign key only if it does not already exist.
 do $$
 begin
   if not exists (
@@ -124,7 +110,6 @@ create unique index if not exists metabolic_messages_local_id_uidx
 create index if not exists metabolic_messages_client_created_idx
   on public.metabolic_messages(client_id, created_at desc);
 
--- The application now uses client_id, not conversation_id, for authorization.
 alter table public.metabolic_messages enable row level security;
 revoke all on public.metabolic_messages from anon;
 grant select, insert on public.metabolic_messages to authenticated;
