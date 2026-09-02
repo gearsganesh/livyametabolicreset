@@ -1,0 +1,15 @@
+{
+  "name": "livya-metabolic-reset",
+  "private": true,
+  "version": "1.0.0",
+  "description": "LIVYA Metabolic Reset production web application",
+  "scripts": {
+    "build": "node scripts/prepare-vercel.mjs",
+    "audit": "node scripts/audit-production.mjs",
+    "verify": "node scripts/verify-production-build.mjs",
+    "check": "npm run audit && npm run verify"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
