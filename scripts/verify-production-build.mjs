@@ -19,7 +19,7 @@ try {
     'window.LIVYA_PRODUCTION_BUILD = true;', '/supabase-config.js', '/supabase-bridge.js',
     '/supabase-persistence.js', '/supabase-storage.js', '/supabase-messages.js',
     '/production-hardening.js', '/production-runtime.js', '/production-files-persistence.js',
-    '/production-message-receipts.js', "const KEY = 'livya-metabolic-production-v1';",
+    '/production-message-receipts.js', '/admin-access.js', "const KEY = 'livya-metabolic-production-v1';",
     'window.LIVYA_PRODUCTION_FILE_PUT', 'window.LIVYA_PRODUCTION_FILE_GET', 'window.LIVYA_PRODUCTION_FILE_DEL'
   ];
   const forbidden = [
@@ -32,7 +32,7 @@ try {
   const assets = [
     'supabase-config.js','supabase-bridge.js','supabase-persistence.js','supabase-storage.js',
     'supabase-messages.js','production-hardening.js','production-runtime.js',
-    'production-files-persistence.js','production-message-receipts.js'
+    'production-files-persistence.js','production-message-receipts.js','admin-access.js'
   ];
   for (const file of assets) if (!existsSync(path.join(out, file))) throw new Error(`Production asset missing: ${file}`);
 
@@ -57,9 +57,20 @@ try {
   const receipts = await readFile(path.join(out, 'production-message-receipts.js'), 'utf8');
   if (!receipts.includes("rpc('metabolic_mark_message_read'")) throw new Error('Secure message receipt RPC missing');
 
+  const adminAccess = await readFile(path.join(out, 'admin-access.js'), 'utf8');
+  for (const token of ['staff','metabolic-api','permissions','Create employee account']) {
+    if (!adminAccess.includes(token)) throw new Error(`ADMIN access console missing: ${token}`);
+  }
+
   const hardening = await readFile(path.join(out, 'production-hardening.js'), 'utf8');
   if (hardening.includes('livya-metabolic-v2')) throw new Error('Legacy local database key leaked into production hardening');
   if (!hardening.includes('livya-metabolic-production-v1')) throw new Error('Production local database key missing from hardening adapter');
+
+  for (const migration of [
+    '20260828000001_bootstrap_admin_profiles.sql','20260828000002_production_rls.sql','20260828000003_messages.sql',
+    '20260828000004_recipe_share_policy_fix.sql','20260828000005_storage_rls.sql','20260828000006_message_read_receipts.sql',
+    '20260828000007_conversation_rls.sql','20260828000008_rbac_staff_permissions.sql'
+  ]) if (!existsSync(path.join(root,'supabase','migrations',migration))) throw new Error(`Required migration missing: ${migration}`);
 
   console.log('Production build verification passed.');
 } finally {
