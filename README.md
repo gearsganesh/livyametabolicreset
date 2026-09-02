@@ -1,127 +1,111 @@
 # LIVYA Metabolic
 
-LIVYA Metabolic is the metabolic and obesity-management application used by LIVYA. The original Claude-generated prototype was a single offline HTML application; the current repository is being hardened into the production application backed by Supabase Auth, Postgres, Storage, Edge Functions, and Vercel.
+LIVYA Metabolic is the metabolic and obesity-management application used by LIVYA. The original Claude-generated prototype was a single offline HTML application. The repository now keeps that clinical UI while moving identity, clinical data, files, and messaging onto Supabase and deploying the frontend through Vercel.
 
-## Production stack
+## Production architecture
 
 - **Frontend:** existing single-page clinical UI in `index.html`
 - **Hosting:** Vercel
 - **Authentication:** Supabase Auth
 - **Database:** Supabase Postgres
-- **File storage:** Supabase Storage bucket `metabolic-files`
+- **File storage:** private Supabase Storage bucket `metabolic-files`
 - **Server-side privileged operations:** Supabase Edge Function `metabolic-api`
-- **Public browser credential:** Supabase publishable key only
-- **Authorization:** Supabase Row Level Security plus application role checks
+- **Browser credential:** Supabase publishable key only
+- **Authorization:** Postgres Row Level Security plus server-side role checks
+- **Messaging:** durable `metabolic_conversations` and `metabolic_messages` tables
 
-The browser-side local model is a compatibility/cache layer inherited from the prototype. It is **not** an authorization boundary and must never be treated as the source of truth for permissions.
+The inherited browser model remains only as a UI compatibility/cache layer during this migration. It is not an authorization boundary and must never be treated as the source of truth for permissions.
 
 ## Production accounts
 
-The application uses Supabase Auth accounts. There are no production demo accounts and there is no production PBKDF2/browser-password flow.
+The application uses Supabase Auth accounts. Production authentication does not depend on the prototype demo-account or browser PBKDF2 flow.
 
-Current staff accounts are managed in **Supabase → Authentication → Users**. Application roles are stored in `metabolic_profiles` and are checked after authentication.
+Staff application roles are stored in `metabolic_profiles` and currently include `ADMIN` and `SUB_ADMIN`. Client identities are represented by `metabolic_clients.client_user_id`.
 
-## Local development
+## Development
 
-The original offline launcher is still available for UI development:
+Install Node.js 22 or newer. The repository intentionally has no frontend dependency tree because the clinical UI is currently shipped as a static HTML application.
+
+```bash
+npm run check
+npm run build
+```
+
+The original offline launchers remain available for UI-only development:
 
 ```text
 Windows: start-windows.bat
 Mac/Linux: start-mac-linux.command
 ```
 
-For a production-authenticated build, serve the site over HTTP and ensure the Supabase project configured in `supabase-config.js` is the intended development/project backend.
-
-## Vercel build
+## Vercel
 
 Vercel runs:
 
 ```text
-node scripts/prepare-vercel.mjs
+npm run build
 ```
 
-The build creates a Build Output API static deployment under `.vercel/output/static`, copies the production Supabase adapters, and injects them into the generated HTML. The Supabase publishable key is safe to ship to the browser only because database and Storage access must be protected by RLS and least-privilege grants.
+which invokes `scripts/prepare-vercel.mjs` and produces `.vercel/output/static`.
 
-## Supabase files
+The build injects the production Supabase adapters into a generated copy of the clinical HTML. No Supabase secret/service-role key may ever be committed or shipped to the browser.
+
+## Supabase migrations
+
+The migration directory is intentionally ordered and uses valid Supabase CLI timestamps:
 
 ```text
-supabase/
-  functions/
-    metabolic-api/
-      deno.json
-      index.ts
-
-supabase-config.js
-supabase-bridge.js
-supabase-persistence.js
-supabase-storage.js
+supabase/migrations/
+  20260828000001_bootstrap_admin_profiles.sql
+  20260828000002_production_rls.sql
+  20260828000003_messages.sql
+  20260828000004_recipe_share_policy_fix.sql
+  20260828000005_storage_rls.sql
+  20260828000006_message_read_receipts.sql
+  20260828000007_conversation_rls.sql
 ```
 
-### `supabase-bridge.js`
+The live project already had an older `metabolic_messages` table. Migration `000003` therefore upgrades it in place, backfills `client_id` and `sender_role`, preserves existing messages, and then enables the new authorization boundary.
 
-Owns the production authentication bridge and background hydration. Supabase Auth is authoritative for sign-in. Bulk database hydration must never be allowed to keep the login button stuck.
+Before applying migrations to a production database, inspect the live schema and take the normal database backup. Apply the migrations through the Supabase SQL Editor or Supabase CLI, then verify the resulting migration status.
 
-### `supabase-persistence.js`
+## Security boundary
 
-Provides the temporary write-through adapter between the inherited local UI model and the Supabase tables. This is a migration layer, not the final domain architecture.
+Every exposed clinical table must have RLS enabled and explicit policies for the operations it supports. Browser role checks are convenience logic only.
 
-### `supabase-storage.js`
+The production policy model is:
 
-Provides authenticated file upload/download/delete helpers and routes privileged client-account operations through the Edge Function.
+1. Supabase Auth establishes the caller identity.
+2. `metabolic_profiles` establishes active staff roles.
+3. Clients can access only rows tied to their `client_user_id`.
+4. Staff access is controlled by the `private.livya_is_staff()` security-definer helper.
+5. Storage access is restricted by Storage policies and signed URLs.
+6. Client message read receipts use a narrowly scoped security-definer RPC instead of granting clients general message updates.
+7. Unauthenticated (`anon`) access is revoked from clinical application tables.
 
-### `metabolic-api`
+## Repository checks
 
-Validates the caller's Supabase JWT and active `metabolic_profiles` row before serving requests. Administrator-only account creation/status changes use a server-side secret key and never expose that key to the browser.
+```bash
+npm run audit
+npm run verify
+npm run check
+```
 
-## Important production rule: RLS
+GitHub Actions runs the production audit and Supabase migration verification on pushes to `main`.
 
-Every exposed application table must have Row Level Security enabled and explicit policies for the required operations. UI role checks alone are not security because browser state can be modified by the user.
+If `SUPABASE_ACCESS_TOKEN` and `SUPABASE_PROJECT_REF` repository secrets are configured, CI also runs `supabase migration list` against the linked production project. Without those secrets, CI still validates the repository migrations and production build.
 
-Before production use, verify:
+## Important production rule
 
-1. `metabolic_profiles` lets a signed-in user read their own profile.
-2. Administrator and sub-admin access matches the intended clinic rules.
-3. Client access is restricted to that client's own records.
-4. Inactive profiles cannot read or modify clinical data.
-5. Storage policies restrict objects to the intended staff/client access.
-6. Delete policies exist only where the product permits deletion.
-7. RLS tests cover both allowed and denied access.
+Never commit:
 
-See `docs/production-audit.md` for the current hardening list.
+- `sb_secret_...`
+- legacy `service_role` keys
+- Supabase database passwords
+- Edge Function service credentials
+- `.env` files containing secrets
 
-## Current hardening status
-
-The repository is being migrated in stages because the original application contains a large amount of tightly coupled prototype UI and data logic.
-
-Completed on the `production-hardening` branch:
-
-- removed obsolete login-cleanup GitHub Actions workflow
-- removed obsolete Supabase bridge patch workflow
-- documented the production architecture and security boundary
-- hardened the `metabolic-api` Edge Function runtime-key lookup for current and legacy Supabase environments
-- improved Edge Function HTTP status handling for authentication, authorization, validation, and server errors
-
-Still required before declaring the application fully production-hardened:
-
-- remove the prototype authentication implementation from shipped application code
-- version the live Supabase schema and RLS policies in migrations
-- add RLS tests
-- connect messages to Supabase
-- synchronize deletes/soft-deletes
-- prevent clients from receiving unshared recipe/program data
-- make audit events idempotent
-- verify Storage policies and bucket restrictions
-- verify the deployed Edge Function version and secrets
-
-## Repository documentation
-
-- `docs/production-audit.md` — current production audit and priority list
-- `docs/build-notes.md` — historical prototype architecture and clinical design notes
-- `samples/` — development-only sample reports and diet sheets
-
-## Security note
-
-Never commit a Supabase secret/service-role key. A browser build may contain the `sb_publishable_...` key, but it must never contain an `sb_secret_...` or legacy `service_role` key.
+A Supabase publishable key may be present in browser configuration. RLS, Storage policies, and server-side authorization must provide the actual security boundary.
 
 ## Clinical note
 
