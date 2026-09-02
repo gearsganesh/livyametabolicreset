@@ -41,6 +41,10 @@ html = html.replace(/<script>\s*window\.LIVYA_PRODUCTION_BUILD\s*=\s*true;\s*<\/
 html = html.replace('</head>', `${injection}\n</head>`);
 
 await writeFile(path.join(out, 'index.html'), html, 'utf8');
+
+// The inherited adapters still contain prototype-era localStorage keys for
+// compatibility. Normalize those keys in the actual Vercel artifact so no
+// production adapter can read the old Claude/browser database.
 for (const name of [
   'supabase-config.js',
   'supabase-bridge.js',
@@ -49,7 +53,12 @@ for (const name of [
   'supabase-messages.js',
   'production-hardening.js'
 ]) {
-  await cp(path.join(root, name), path.join(out, name));
+  const source = path.join(root, name);
+  let content = await readFile(source, 'utf8');
+  if (name === 'supabase-bridge.js' || name === 'production-hardening.js') {
+    content = content.replaceAll('livya-metabolic-v2', 'livya-metabolic-production-v1');
+  }
+  await writeFile(path.join(out, name), content, 'utf8');
 }
 
 for (const name of ['docs', 'samples']) {

@@ -44,11 +44,18 @@ for (const file of assets) {
 const config = await readFile(path.join(out, 'supabase-config.js'), 'utf8');
 if (!config.includes('sb_publishable_')) throw new Error('Publishable Supabase key missing from production config');
 if (config.includes('sb_secret_') || config.includes('service_role')) throw new Error('Secret Supabase credential found in browser config');
+if (!config.includes('https://khtwrprihdkbpllxqlmh.supabase.co')) throw new Error('Production config is not pointed at the dedicated Supabase project');
 
 const bridge = await readFile(path.join(out, 'supabase-bridge.js'), 'utf8');
 for (const token of ['signInWithPassword','metabolic_profiles','addEventListener(\'submit\'']) {
   if (!bridge.includes(token)) throw new Error(`Production Supabase auth bridge missing: ${token}`);
 }
+if (bridge.includes('livya-metabolic-v2')) throw new Error('Legacy local database key leaked into production Supabase bridge');
+if (!bridge.includes('livya-metabolic-production-v1')) throw new Error('Production local database key missing from Supabase bridge');
+
+const hardening = await readFile(path.join(out, 'production-hardening.js'), 'utf8');
+if (hardening.includes('livya-metabolic-v2')) throw new Error('Legacy local database key leaked into production hardening');
+if (!hardening.includes('livya-metabolic-production-v1')) throw new Error('Production local database key missing from hardening adapter');
 
 console.log('Production build verification passed.');
 await rm(out, {recursive:true, force:true});
