@@ -1,0 +1,51 @@
+name: Supabase production verification
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/**'
+      - '.github/workflows/supabase-verify.yml'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate migration filenames
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in supabase/migrations/*.sql; do
+            base="$(basename "$file")"
+            [[ "$base" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]] || {
+              echo "Invalid migration filename: $base"
+              exit 1
+            }
+          done
+
+      - name: Check migration status against production
+        if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.SUPABASE_PROJECT_REF != '' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+        run: |
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase migration list
+
+      - name: Verify SQL files are present
+        run: |
+          test -f supabase/migrations/20260828000001_bootstrap_admin_profiles.sql
+          test -f supabase/migrations/20260828000002_production_rls.sql
+          test -f supabase/migrations/20260828000003_messages.sql
+          test -f supabase/migrations/20260828000004_recipe_share_policy_fix.sql
+          test -f supabase/migrations/20260828000005_storage_rls.sql
+          test -f supabase/migrations/20260828000006_message_read_receipts.sql
