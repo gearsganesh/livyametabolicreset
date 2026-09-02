@@ -16,29 +16,23 @@ try {
   await run(process.execPath, ['scripts/prepare-vercel.mjs']);
   const html = await readFile(path.join(out, 'index.html'), 'utf8');
   const required = [
-    'window.LIVYA_PRODUCTION_BUILD = true;',
-    '/supabase-config.js', '/supabase-bridge.js', '/supabase-persistence.js',
-    '/supabase-storage.js', '/supabase-messages.js', '/production-hardening.js',
-    '/production-runtime.js', '/production-files-persistence.js',
-    "const KEY = 'livya-metabolic-production-v1';",
-    'window.LIVYA_PRODUCTION_FILE_PUT',
-    'window.LIVYA_PRODUCTION_FILE_GET',
-    'window.LIVYA_PRODUCTION_FILE_DEL'
+    'window.LIVYA_PRODUCTION_BUILD = true;', '/supabase-config.js', '/supabase-bridge.js',
+    '/supabase-persistence.js', '/supabase-storage.js', '/supabase-messages.js',
+    '/production-hardening.js', '/production-runtime.js', '/production-files-persistence.js',
+    '/production-message-receipts.js', "const KEY = 'livya-metabolic-production-v1';",
+    'window.LIVYA_PRODUCTION_FILE_PUT', 'window.LIVYA_PRODUCTION_FILE_GET', 'window.LIVYA_PRODUCTION_FILE_DEL'
   ];
   const forbidden = [
-    'DB = migrate(picked) || seed();',
-    "const KEY = 'livya-metabolic-v2';",
-    "fetch('data/patients.json'",
-    "claude.use('artifact')",
-    'service_role', 'sb_secret_'
+    'DB = migrate(picked) || seed();', "const KEY = 'livya-metabolic-v2';",
+    "fetch('data/patients.json'", "claude.use('artifact')", 'service_role', 'sb_secret_'
   ];
   for (const token of required) if (!html.includes(token)) throw new Error(`Production build missing: ${token}`);
   for (const token of forbidden) if (html.includes(token)) throw new Error(`Prototype/secret configuration leaked into production build: ${token}`);
 
   const assets = [
-    'supabase-config.js','supabase-bridge.js','supabase-persistence.js',
-    'supabase-storage.js','supabase-messages.js','production-hardening.js',
-    'production-runtime.js','production-files-persistence.js'
+    'supabase-config.js','supabase-bridge.js','supabase-persistence.js','supabase-storage.js',
+    'supabase-messages.js','production-hardening.js','production-runtime.js',
+    'production-files-persistence.js','production-message-receipts.js'
   ];
   for (const file of assets) if (!existsSync(path.join(out, file))) throw new Error(`Production asset missing: ${file}`);
 
@@ -60,6 +54,8 @@ try {
   }
   const filePersistence = await readFile(path.join(out, 'production-files-persistence.js'), 'utf8');
   if (!filePersistence.includes("from('metabolic_files')")) throw new Error('Production file metadata persistence missing');
+  const receipts = await readFile(path.join(out, 'production-message-receipts.js'), 'utf8');
+  if (!receipts.includes("rpc('metabolic_mark_message_read'")) throw new Error('Secure message receipt RPC missing');
 
   const hardening = await readFile(path.join(out, 'production-hardening.js'), 'utf8');
   if (hardening.includes('livya-metabolic-v2')) throw new Error('Legacy local database key leaked into production hardening');
