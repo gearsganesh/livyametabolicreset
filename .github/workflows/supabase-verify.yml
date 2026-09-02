@@ -20,12 +20,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
-
       - name: Validate migration filenames
         shell: bash
         run: |
@@ -35,12 +33,8 @@ jobs:
           test "${#files[@]}" -gt 0
           for file in "${files[@]}"; do
             base="$(basename "$file")"
-            [[ "$base" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]] || {
-              echo "Invalid migration filename: $base"
-              exit 1
-            }
+            [[ "$base" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]] || { echo "Invalid migration filename: $base"; exit 1; }
           done
-
       - name: Verify expected migrations
         shell: bash
         run: |
@@ -52,7 +46,7 @@ jobs:
           test -f supabase/migrations/20260828000005_storage_rls.sql
           test -f supabase/migrations/20260828000006_message_read_receipts.sql
           test -f supabase/migrations/20260828000007_conversation_rls.sql
-
+          test -f supabase/migrations/20260828000008_rbac_staff_permissions.sql
       - name: Check migration status against production
         shell: bash
         run: |
