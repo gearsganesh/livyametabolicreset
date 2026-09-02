@@ -12,7 +12,6 @@ alter table public.metabolic_messages
   add column if not exists local_id text,
   add column if not exists metadata jsonb not null default '{}'::jsonb;
 
--- Recover the client relationship from the existing conversation records.
 update public.metabolic_messages m
 set client_id = c.client_id
 from public.metabolic_conversations c
@@ -27,7 +26,7 @@ begin
 end;
 $$;
 
--- Derive the sender role from the production identity model.
+-- Derive sender role from the production identity model.
 update public.metabolic_messages m
 set sender_role = 'CLIENT'
 where sender_role is null
@@ -59,8 +58,6 @@ begin
 end;
 $$;
 
--- Existing IDs become stable local IDs. Legacy read_at is retained and copied
--- into metadata because the old schema did not record which user read a message.
 update public.metabolic_messages
 set local_id = coalesce(local_id, id::text),
     metadata = case
@@ -85,7 +82,6 @@ alter table public.metabolic_messages
   add constraint metabolic_messages_body_length_check
   check (length(trim(body)) between 1 and 10000);
 
--- Add the expected client foreign key only if it does not already exist.
 do $$
 begin
   if not exists (
