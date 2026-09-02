@@ -14,6 +14,9 @@ permissions:
 jobs:
   verify:
     runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -27,7 +30,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for file in supabase/migrations/*.sql; do
+          shopt -s nullglob
+          files=(supabase/migrations/*.sql)
+          test "${#files[@]}" -gt 0
+          for file in "${files[@]}"; do
             base="$(basename "$file")"
             [[ "$base" =~ ^[0-9]{14}_[a-z0-9_]+\.sql$ ]] || {
               echo "Invalid migration filename: $base"
@@ -35,20 +41,25 @@ jobs:
             }
           done
 
-      - name: Check migration status against production
-        if: ${{ secrets.SUPABASE_ACCESS_TOKEN != '' && secrets.SUPABASE_PROJECT_REF != '' }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_PROJECT_REF: ${{ secrets.SUPABASE_PROJECT_REF }}
+      - name: Verify expected migrations
+        shell: bash
         run: |
-          supabase link --project-ref "$SUPABASE_PROJECT_REF"
-          supabase migration list
-
-      - name: Verify SQL files are present
-        run: |
+          set -euo pipefail
           test -f supabase/migrations/20260828000001_bootstrap_admin_profiles.sql
           test -f supabase/migrations/20260828000002_production_rls.sql
           test -f supabase/migrations/20260828000003_messages.sql
-          test -f supabase/migrations/20260828000004_fix_recipe_global_share.sql
+          test -f supabase/migrations/20260828000004_recipe_share_policy_fix.sql
           test -f supabase/migrations/20260828000005_storage_rls.sql
           test -f supabase/migrations/20260828000006_message_read_receipts.sql
+          test -f supabase/migrations/20260828000007_conversation_rls.sql
+
+      - name: Check migration status against production
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ -z "${SUPABASE_ACCESS_TOKEN:-}" || -z "${SUPABASE_PROJECT_REF:-}" ]]; then
+            echo "Supabase production secrets are not configured; local migration validation completed."
+            exit 0
+          fi
+          supabase link --project-ref "$SUPABASE_PROJECT_REF"
+          supabase migration list
