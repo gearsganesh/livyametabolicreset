@@ -5,14 +5,18 @@ create or replace function public.metabolic_mark_message_read(message_id uuid)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = ''
 as $$
 begin
   update public.metabolic_messages m
-  set read_by = array(select distinct x from unnest(coalesce(m.read_by, '{}'::uuid[]) || array[auth.uid()]) x)
+  set read_by = array(
+    select distinct x
+    from unnest(coalesce(m.read_by, '{}'::uuid[]) || array[auth.uid()]) x
+  )
   where m.id = metabolic_mark_message_read.message_id
     and exists (
-      select 1 from public.metabolic_clients c
+      select 1
+      from public.metabolic_clients c
       where c.id = m.client_id
         and c.client_user_id = auth.uid()
         and c.status = 'ACTIVE'
