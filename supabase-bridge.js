@@ -27,7 +27,8 @@
     role: null,
     lastPersistAt: null,
     lastPersistError: null,
-    persist: null
+    persist: null,
+    hydrate: null
   };
   window.LIVYA_BACKEND = backend;
 
@@ -192,6 +193,21 @@
     }
   }
 
+  backend.hydrate = hydrate;
+
+  async function activateAuthenticatedUi() {
+    try {
+      const result = await hydrate();
+      if (!result) return false;
+      if (typeof window.showApp === 'function') window.showApp();
+      if (typeof window.render === 'function') window.render();
+      return true;
+    } catch (error) {
+      console.error('[LIVYA] Authenticated UI activation failed:', error);
+      return false;
+    }
+  }
+
   function backendError(error) {
     const e = error || {};
     const message = String(e?.message || e || 'Unable to sign in');
@@ -276,7 +292,9 @@
     installLoginInterceptor();
     try {
       const session = await getSession();
-      if (session?.user) void hydrate().catch(error => console.error('[LIVYA] Background hydration failed:', error));
+      if (session?.user) {
+        await activateAuthenticatedUi();
+      }
     } catch (error) {
       console.error('[LIVYA] Auth bootstrap failed:', error);
     }
