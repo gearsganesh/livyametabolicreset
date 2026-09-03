@@ -38,20 +38,22 @@
       localStorage.setItem('livya-metabolic-auth', JSON.stringify(result.data?.session || session));
     } catch (_) {}
 
-    reply('LIVYA_METABOLIC_SESSION_ACCEPTED', {
-      userId: result.data?.user?.id || result.data?.session?.user?.id || session.user?.id || null
-    });
-
-    // The embedded app can already have rendered its login screen before the
-    // parent session arrives. A single reload makes the normal Supabase
-    // INITIAL_SESSION path authoritative, without creating a reload loop.
+    // The embedded app may already be displaying its login screen. Reload once
+    // after the session is persisted so the normal INITIAL_SESSION boot path
+    // owns the authenticated state. The sessionStorage flag prevents a loop.
     if (sessionStorage.getItem(RELOAD_KEY) !== '1') {
       sessionStorage.setItem(RELOAD_KEY, '1');
+      reply('LIVYA_METABOLIC_SESSION_RELOADING', {
+        userId: result.data?.user?.id || result.data?.session?.user?.id || session.user?.id || null
+      });
       window.location.reload();
       return;
     }
 
     sessionStorage.removeItem(RELOAD_KEY);
+    reply('LIVYA_METABOLIC_SESSION_ACCEPTED', {
+      userId: result.data?.user?.id || result.data?.session?.user?.id || session.user?.id || null
+    });
     try {
       if (typeof window.render === 'function') window.render();
     } catch (_) {}
