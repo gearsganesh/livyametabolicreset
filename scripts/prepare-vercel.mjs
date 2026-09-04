@@ -21,7 +21,7 @@ const injection = [
   '<script src="/production-runtime.js"></script>',
   '<script src="/production-files-persistence.js"></script>',
   '<script src="/production-message-receipts.js"></script>',
-  '<script src="/admin-access.js"></script>’
+  '<script src="/admin-access.js"></script>'
 ].join('\n');
 
 html = html.replace('let DB = null, CAP = null;', 'var DB = null, CAP = null;');
