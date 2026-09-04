@@ -12,6 +12,7 @@ const injection = [
   '<script>window.LIVYA_PRODUCTION_BUILD = true;</script>',
   '<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>',
   '<script src="/supabase-config.js"></script>',
+  '<script src="/supabase-auth-recovery.js"></script>',
   '<script src="/supabase-bridge.js"></script>',
   '<script src="/supabase-persistence.js"></script>',
   '<script src="/supabase-storage.js"></script>',
@@ -20,7 +21,7 @@ const injection = [
   '<script src="/production-runtime.js"></script>',
   '<script src="/production-files-persistence.js"></script>',
   '<script src="/production-message-receipts.js"></script>',
-  '<script src="/admin-access.js"></script>'
+  '<script src="/admin-access.js"></script>’
 ].join('\n');
 
 html = html.replace('let DB = null, CAP = null;', 'var DB = null, CAP = null;');
@@ -39,14 +40,14 @@ html = html.replaceAll('await window.LIVYA_FILES.del(f.blobKey).catch(()=>{})', 
 html = html.replace(/try\{ CAP = await \(window\.claude && claude\.use \? claude\.use\('artifact'\) : null\); \}catch\(e\)\{ CAP = null; \}/g, 'CAP = null;');
 html = html.replace(/try\{ const r = await fetch\('data\/patients\.json', \{cache:'no-store'\}\); if\(r\.ok\) cloud = await r\.json\(\); \}catch\(e\)\{\}/g, 'cloud = null;');
 
-html = html.replace(/<script[^>]+src=["'](?:https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2|\/?supabase-config\.js|\/?supabase-bridge\.js|\/?supabase-persistence\.js|\/?supabase-storage\.js|\/?supabase-messages\.js|\/?production-hardening\.js|\/?production-runtime\.js|\/?production-files-persistence\.js|\/?production-message-receipts\.js|\/?admin-access\.js)["'][^>]*><\/script>\s*/gi, '');
+html = html.replace(/<script[^>]+src=["'](?:https:\/\/cdn\.jsdelivr\.net\/npm\/@supabase\/supabase-js@2|\/?supabase-config\.js|\/?supabase-auth-recovery\.js|\/?supabase-bridge\.js|\/?supabase-persistence\.js|\/?supabase-storage\.js|\/?supabase-messages\.js|\/?production-hardening\.js|\/?production-runtime\.js|\/?production-files-persistence\.js|\/?production-message-receipts\.js|\/?admin-access\.js)["'][^>]*><\/script>\s*/gi, '');
 html = html.replace(/<script>\s*window\.LIVYA_PRODUCTION_BUILD\s*=\s*true;\s*<\/script>\s*/gi, '');
 html = html.replace('</head>', `${injection}\n</head>`);
 
 await writeFile(path.join(out, 'index.html'), html, 'utf8');
 
 for (const name of [
-  'supabase-config.js', 'supabase-bridge.js', 'supabase-persistence.js',
+  'supabase-config.js', 'supabase-auth-recovery.js', 'supabase-bridge.js', 'supabase-persistence.js',
   'supabase-storage.js', 'supabase-messages.js', 'production-hardening.js',
   'production-runtime.js', 'production-files-persistence.js',
   'production-message-receipts.js', 'admin-access.js'
