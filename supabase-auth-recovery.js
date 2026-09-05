@@ -11,7 +11,9 @@
   const isRecoveryUrl = () => {
     try {
       const u = new URL(window.location.href);
-      return u.searchParams.get(RECOVERY_PARAM) === '1';
+      if (u.searchParams.get(RECOVERY_PARAM) === '1') return true;
+      const hash = new URLSearchParams(String(u.hash || '').replace(/^#/, ''));
+      return hash.get('type') === 'recovery';
     } catch (_) { return false; }
   };
 
@@ -28,8 +30,8 @@
   let recoveryError = '';
   let recoverySuccess = false;
 
-  const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  const esc = value => String(value ?? '').replace(/[&<>\"']/g, c => ({
+    '&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'
   }[c]));
 
   function css() {
@@ -130,6 +132,7 @@
         render();
       }
     } catch (error) {
+      console.error('[LIVYA] Password recovery session error:', error);
       recoveryError = 'Unable to establish the password-reset session. Request a new reset email and try again.';
       render();
     }
@@ -144,7 +147,8 @@
     statusNode.textContent = 'Sending reset email…';
     statusNode.className = 'lr-msg';
     try {
-      const redirectTo = `${window.location.origin}${window.location.pathname}?${RECOVERY_PARAM}=1`;
+      const configuredRedirect = String(cfg.recoveryRedirectUrl || '').trim();
+      const redirectTo = configuredRedirect || `${window.location.origin}${window.location.pathname}?${RECOVERY_PARAM}=1`;
       const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo });
       if (error) throw error;
       statusNode.textContent = 'If that account can use password recovery, a reset email has been sent. Open the newest email and follow the link.';
@@ -164,7 +168,7 @@
     const wrap = document.createElement('div');
     wrap.id = 'livyaForgotPassword';
     wrap.style.cssText = 'margin-top:10px;text-align:right;';
-    wrap.innerHTML = `<button type="button" id="lrForgot" style="border:0;background:transparent;padding:4px 0;color:inherit;text-decoration:underline;cursor:pointer;font:10px var(--mono,monospace);">Forgot password?</button><div id="lrResetStatus" style="text-align:left"></div>`;
+    wrap.innerHTML = `<button type="button" id="lrForgot" style="border:0;background:transparent;padding:4px 0;color:inherit;text-decoration:underline;cursor:pointer;font:10px var(--mono,monospace;">Forgot password?</button><div id="lrResetStatus" style="text-align:left"></div>`;
     form.appendChild(wrap);
     wrap.querySelector('#lrForgot').onclick = async () => {
       const email = emailInput.value.trim().toLowerCase();
