@@ -168,7 +168,7 @@
     const wrap = document.createElement('div');
     wrap.id = 'livyaForgotPassword';
     wrap.style.cssText = 'margin-top:10px;text-align:right;';
-    wrap.innerHTML = `<button type="button" id="lrForgot" style="border:0;background:transparent;padding:4px 0;color:inherit;text-decoration:underline;cursor:pointer;font:10px var(--mono,monospace;">Forgot password?</button><div id="lrResetStatus" style="text-align:left"></div>`;
+    wrap.innerHTML = `<button type="button" id="lrForgot" style="border:0;background:transparent;padding:4px 0;color:inherit;text-decoration:underline;cursor:pointer;font:10px var(--mono,monospace);">Forgot password?</button><div id="lrResetStatus" style="text-align:left"></div>`;
     form.appendChild(wrap);
     wrap.querySelector('#lrForgot').onclick = async () => {
       const email = emailInput.value.trim().toLowerCase();
