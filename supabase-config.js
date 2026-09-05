@@ -14,5 +14,6 @@ window.LIVYA_SUPABASE_CONFIG = Object.freeze({
   proxyUrl: SUPABASE_PROXY_URL,
   publishableKey: 'sb_publishable_DWdn7pbFd3kll2rbDmPkpQ_pH80mxTV',
   apiFunction: 'metabolic-api',
-  storageBucket: 'metabolic-files'
+  storageBucket: 'metabolic-files',
+  recoveryRedirectUrl: 'https://livyametabolicreset.vercel.app/?recovery=1'
 });
